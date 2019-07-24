@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 """
-Names: D Fouche
+Names: Dylan Fouche
 Student Number: FCHDYL001
 Prac: Prac 1
 Date: 22/07/2019
