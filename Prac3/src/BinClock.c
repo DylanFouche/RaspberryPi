@@ -3,15 +3,15 @@
  * Jarrod Olivier
  * Modified for EEE3095S/3096S by Keegan Crankshaw
  * August 2019
- * 
- * <STUDNUM_1> <STUDNUM_2>
- * Date
+ *
+ * FCHDYL001
+ * 19/08/2019
 */
 
 #include <wiringPi.h>
 #include <wiringPiI2C.h>
-#include <stdio.h> //For printf functions
-#include <stdlib.h> // For system functions
+#include <stdio.h>
+#include <stdlib.h>
 
 #include "BinClock.h"
 #include "CurrentTime.h"
@@ -32,7 +32,8 @@ void initGPIO(void){
 	printf("Setting up\n");
 	wiringPiSetup(); //This is the default mode. If you want to change pinouts, be aware
 	
-	RTC = wiringPiI2CSetup(RTCAddr); //Set up the RTC
+	//Set up the RTC
+	RTC = wiringPiI2CSetup(RTCAddr);
 	
 	//Set up the LEDS
 	for(int i; i < sizeof(LEDS)/sizeof(LEDS[0]); i++){
@@ -41,7 +42,7 @@ void initGPIO(void){
 	
 	//Set Up the Seconds LED for PWM
 	//Write your logic here
-	
+
 	printf("LEDS done\n");
 	
 	//Set up the Buttons
@@ -72,16 +73,25 @@ int main(void){
 	wiringPiI2CWriteReg8(RTC, MIN, 0x4);
 	wiringPiI2CWriteReg8(RTC, SEC, 0x00);
 	
+	//Start the RTC counting
+	wiringPiI2CWriteReg8(RTC,SEC,0b10000000);
+
 	// Repeat this until we shut down
 	for (;;){
 		//Fetch the time from the RTC
-		//Write your logic here
+		HH = wiringPiI2CReadReg8(RTC,HOUR);
+		MM = wiringPiI2CReadReg8(RTC,MIN);
+		SS = wiringPiI2CReadReg8(RTC,SEC);
 		
+		hours = hexCompensation(HH & 0b00111111);
+		mins = hexCompensation(MM & 0b01111111);
+		secs = hexCompensation(SS & 0b01111111);
+
 		//Function calls to toggle LEDs
 		//Write your logic here
 		
 		// Print out the time we have stored on our RTC
-		printf("The current time is: %x:%x:%x\n", hours, mins, secs);
+		printf("The current time is: %d:%d:%d\n", hours, mins, secs);
 
 		//using a delay to make our program "less CPU hungry"
 		delay(1000); //milliseconds
