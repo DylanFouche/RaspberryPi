@@ -88,7 +88,8 @@ int main(void){
 		secs = hexCompensation(SS & 0b01111111);
 
 		//Function calls to toggle LEDs
-		//Write your logic here
+		lightHours(0);
+		lightMins(0);
 		
 		// Print out the time we have stored on our RTC
 		printf("The current time is: %d:%d:%d\n", hours, mins, secs);
@@ -116,15 +117,34 @@ int hFormat(int hours){
 /*
  * Turns on corresponding LED's for hours
  */
-void lightHours(int units){
-	// Write your logic to light up the hour LEDs here	
+void lightHours(){
+	int hours_12 = hFormat(hours);
+	int h0 = hours_12 & 0b1;
+	int h1 = hours_12 & 0b10;
+	int h2 = hours_12 & 0b100;
+	int h3 = hours_12 & 0b1000;
+	digitalWrite(LEDS[0],h3);
+	digitalWrite(LEDS[1],h2);
+	digitalWrite(LEDS[2],h1);
+	digitalWrite(LEDS[3],h0);
 }
 
 /*
  * Turn on the Minute LEDs
  */
 void lightMins(int units){
-	//Write your logic to light up the minute LEDs here
+	int m0 = mins & 0b1;
+	int m1 = mins & 0b10;
+	int m2 = mins & 0b100;
+	int m3 = mins & 0b1000;
+	int m4 = mins & 0b10000;
+	int m5 = mins & 0b100000;
+	digitalWrite(LEDS[4],m5);
+	digitalWrite(LEDS[5],m4);
+	digitalWrite(LEDS[6],m3);
+	digitalWrite(LEDS[7],m2);
+	digitalWrite(LEDS[8],m1);
+	digitalWrite(LEDS[9],m0);
 }
 
 /*

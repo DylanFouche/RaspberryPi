@@ -3,8 +3,8 @@
 
 // Function definitions
 int hFormat(int hours);
-void lightHours(int units);
-void lightMins(int units);
+void lightHours();
+void lightMins();
 int hexCompensation(int units);
 int decCompensation(int units);
 void initGPIO(void);
