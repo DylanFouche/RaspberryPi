@@ -8,7 +8,7 @@ void lightMins();
 int hexCompensation(int units);
 int decCompensation(int units);
 void initGPIO(void);
-void secPWM(int units);
+void secPWM();
 void hourInc(void);
 void minInc(void);
 void toggleTime(void);

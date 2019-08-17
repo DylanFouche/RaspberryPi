@@ -12,6 +12,7 @@
 #include <wiringPiI2C.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <softPwm.h>
 
 #include "BinClock.h"
 #include "CurrentTime.h"
@@ -20,77 +21,74 @@
 int hours, mins, secs;
 long lastInterruptTime = 0; //Used for button debounce
 int RTC; //Holds the RTC instance
-
 int HH,MM,SS;
 
 void initGPIO(void){
-	/* 
+	/*
 	 * Sets GPIO using wiringPi pins. see pinout.xyz for specific wiringPi pins
-	 * You can also use "gpio readall" in the command line to get the pins
-	 * Note: wiringPi does not use GPIO or board pin numbers (unless specifically set to that mode)
 	 */
+
 	printf("Setting up\n");
-	wiringPiSetup(); //This is the default mode. If you want to change pinouts, be aware
-	
+
+	//setup wiringPi in default mode
+	wiringPiSetup();
+
 	//Set up the RTC
 	RTC = wiringPiI2CSetup(RTCAddr);
-	
-	//Set up the LEDS
+
+	//Set up the minutes and hours LEDS
 	for(int i; i < sizeof(LEDS)/sizeof(LEDS[0]); i++){
 	    pinMode(LEDS[i], OUTPUT);
 	}
-	
+
 	//Set Up the Seconds LED for PWM
-	//Write your logic here
+	softPwmCreate(SECS,0,59);
 
 	printf("LEDS done\n");
-	
+
 	//Set up the Buttons
 	for(int j; j < sizeof(BTNS)/sizeof(BTNS[0]); j++){
 		pinMode(BTNS[j], INPUT);
 		pullUpDnControl(BTNS[j], PUD_UP);
 	}
-	
+
 	//Attach interrupts to Buttons
 	wiringPiISR(5, INT_EDGE_RISING, &minInc);
 	wiringPiISR(30, INT_EDGE_RISING, &hourInc);
-	
+
 	printf("BTNS done\n");
 	printf("Setup done\n");
 }
 
-
-/*
- * The main function
- * This function is called, and calls all relevant functions we've written
- */
 int main(void){
+	//call gpio init function
 	initGPIO();
 
-	//Set random time (3:04PM)
-	//You can comment this file out later
+	//Set random starting time on RTC (3:04PM)
 	wiringPiI2CWriteReg8(RTC, HOUR, 0x13+TIMEZONE);
 	wiringPiI2CWriteReg8(RTC, MIN, 0x4);
 	wiringPiI2CWriteReg8(RTC, SEC, 0x00);
-	
+
 	//Start the RTC counting
 	wiringPiI2CWriteReg8(RTC,SEC,0b10000000);
 
-	// Repeat this until we shut down
+	//Loop until we quit
 	for (;;){
 		//Fetch the time from the RTC
 		HH = wiringPiI2CReadReg8(RTC,HOUR);
 		MM = wiringPiI2CReadReg8(RTC,MIN);
 		SS = wiringPiI2CReadReg8(RTC,SEC);
-		
+
+		//Grab the important bits and convert to decimal
 		hours = hexCompensation(HH & 0b00111111);
 		mins = hexCompensation(MM & 0b01111111);
 		secs = hexCompensation(SS & 0b01111111);
 
-		//Function calls to toggle LEDs
-		lightHours(0);
-		lightMins(0);
-		
+		//Display updated time on LEDs
+		lightHours();
+		lightMins();
+		secPWM();
+
 		// Print out the time we have stored on our RTC
 		printf("The current time is: %d:%d:%d\n", hours, mins, secs);
 
@@ -100,11 +98,11 @@ int main(void){
 	return 0;
 }
 
-/*
- * Change the hour format to 12 hours
- */
 int hFormat(int hours){
-	/*formats to 12h*/
+	/*
+	 * change hours format to 12h
+	 */
+
 	if (hours >= 24){
 		hours = 0;
 	}
@@ -114,31 +112,37 @@ int hFormat(int hours){
 	return (int)hours;
 }
 
-/*
- * Turns on corresponding LED's for hours
- */
 void lightHours(){
+	/*
+	 * display hours binary value on LED array
+	 */
+
 	int hours_12 = hFormat(hours);
+	//get each bit from hour value
 	int h0 = hours_12 & 0b1;
 	int h1 = hours_12 & 0b10;
 	int h2 = hours_12 & 0b100;
 	int h3 = hours_12 & 0b1000;
+	//write bits to led outputs
 	digitalWrite(LEDS[0],h3);
 	digitalWrite(LEDS[1],h2);
 	digitalWrite(LEDS[2],h1);
 	digitalWrite(LEDS[3],h0);
 }
 
-/*
- * Turn on the Minute LEDs
- */
 void lightMins(int units){
+	/*
+	 * display minutes binary value on LED array
+	 */
+
+	//get each bit from minute value
 	int m0 = mins & 0b1;
 	int m1 = mins & 0b10;
 	int m2 = mins & 0b100;
 	int m3 = mins & 0b1000;
 	int m4 = mins & 0b10000;
 	int m5 = mins & 0b100000;
+	//write bits to led outputs
 	digitalWrite(LEDS[4],m5);
 	digitalWrite(LEDS[5],m4);
 	digitalWrite(LEDS[6],m3);
@@ -147,26 +151,20 @@ void lightMins(int units){
 	digitalWrite(LEDS[9],m0);
 }
 
-/*
- * PWM on the Seconds LED
- * The LED should have 60 brightness levels
- * The LED should be "off" at 0 seconds, and fully bright at 59 seconds
- */
-void secPWM(int units){
-	// Write your logic here
+void secPWM(){
+	/*
+	 * Update pwm value on seconds led
+	 */
+
+	softPwmWrite(SECS,secs);
 }
 
-/*
- * hexCompensation
- * This function may not be necessary if you use bit-shifting rather than decimal checking for writing out time values
- */
 int hexCompensation(int units){
-	/*Convert HEX or BCD value to DEC where 0x45 == 0d45 
-	  This was created as the lighXXX functions which determine what GPIO pin to set HIGH/LOW
-	  perform operations which work in base10 and not base16 (incorrect logic) 
-	*/
-	int unitsU = units%0x10;
+	/*
+         * Convert HEX or BCD value to DEC where 0x45 == 0d45
+	 */
 
+	int unitsU = units%0x10;
 	if (units >= 0x50){
 		units = 50 + unitsU;
 	}
@@ -185,14 +183,12 @@ int hexCompensation(int units){
 	return units;
 }
 
-
-/*
- * decCompensation
- * This function "undoes" hexCompensation in order to write the correct base 16 value through I2C
- */
 int decCompensation(int units){
-	int unitsU = units%10;
+	/*
+	 * Convert DEC to HEX value for writing through I2C
+	 */
 
+	int unitsU = units%10;
 	if (units >= 50){
 		units = 0x50 + unitsU;
 	}
@@ -211,14 +207,11 @@ int decCompensation(int units){
 	return units;
 }
 
-
-/*
- * hourInc
- * Fetch the hour value off the RTC, increase it by 1, and write back
- * Be sure to cater for there only being 23 hours in a day
- * Software Debouncing should be used
- */
 void hourInc(void){
+	/*
+	 * Interrupt handler to increment hour value and write back to RTC
+	 */
+
 	//software debounce
 	long interruptTime = millis();
 	if (interruptTime - lastInterruptTime>300){
@@ -233,13 +226,11 @@ void hourInc(void){
 	lastInterruptTime = interruptTime;
 }
 
-/* 
- * minInc
- * Fetch the minute value off the RTC, increase it by 1, and write back
- * Be sure to cater for there only being 60 minutes in an hour
- * Software Debouncing should be used
- */
 void minInc(void){
+	/*
+	 * Interrupt handler to increment minute value and write back to RTC
+	 */
+
 	//software debounce
 	long interruptTime = millis();
 	if (interruptTime - lastInterruptTime>300){
