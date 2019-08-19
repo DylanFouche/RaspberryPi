@@ -62,7 +62,7 @@ void initGPIO(void){
 
 int main(void){
 	//call gpio init function
-	initGPIO();
+	initGpio();
 
 	//Set random starting time on RTC (3:04PM)
 	wiringPiI2CWriteReg8(RTC, HOUR, 0x13+TIMEZONE);
