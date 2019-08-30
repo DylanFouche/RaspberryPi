@@ -45,9 +45,14 @@ int setup_gpio(void){
     //Set up wiring Pi
     wiringPiSetup();
     //setting up the buttons
-	//TODO
+    for(int j = 2; j <= 3; j++){
+	pinMode(BTNS[j], INPUT);
+        pullUpDnControl(BTNS[j], PUD_UP);
+    }
+    wiringPiISR(2, INT_EDGE_RISING, &play_pause_isr);
+    wiringPiISR(3, INT_EDGE_RISING, &stop_isr);
     //setting up the SPI interface
-    //TODO
+    wiringPiSPISetup (0, 819200);
     return 0;
 }
 
