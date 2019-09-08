@@ -94,7 +94,6 @@ void *playThread(void *threadargs){
     while(!stopped){
         if(playing){
         //Write the buffer out to SPI
-	//int test = 0b0001111111111100;
 	wiringPiSPIDataRW (SPI_CHAN, (unsigned char*)buffer[bufferReading][buffer_location], 2);
         //Do some maths to check if you need to toggle buffers
         buffer_location++;
