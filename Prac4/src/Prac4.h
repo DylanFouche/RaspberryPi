@@ -35,7 +35,7 @@
 
 //SPI Settings
 #define SPI_CHAN 0
-#define SPI_SPEED 819200
+#define SPI_SPEED 409600
 
 //Debounce time
 #define DEBOUNCE_TIME 200
