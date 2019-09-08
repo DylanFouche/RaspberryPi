@@ -1,7 +1,7 @@
 /*
  * Prac4.cpp
  * 
- * Originall written by Stefan Schröder and Dillion Heald
+ * Original written by Stefan Schröder and Dillion Heald
  * 
  * Adapted for EEE3096S 2019 by Keegan Crankshaw
  * 
@@ -31,11 +31,17 @@ bool threadReady = false; //using this to finish writing the first column at the
 // Configure your interrupts here.
 // Don't forget to use debouncing.
 void play_pause_isr(void){
-    //Write your logis here
+    long interrupt_time = millis();
+    if(interrupt_time - last_play_interrupt > DEBOUNCE_TIME){
+        playing = !playing;
+    }
 }
 
 void stop_isr(void){
-    // Write your logic here
+    long interrupt_time = millis();
+    if(interrupt_time - last_stop_interrupt > DEBOUNCE_TIME){
+        stopped = !stopped;
+    }
 }
 
 /*
@@ -45,14 +51,14 @@ int setup_gpio(void){
     //Set up wiring Pi
     wiringPiSetup();
     //setting up the buttons
-    for(int j = 2; j <= 3; j++){
-	pinMode(BTNS[j], INPUT);
-        pullUpDnControl(BTNS[j], PUD_UP);
-    }
-    wiringPiISR(2, INT_EDGE_RISING, &play_pause_isr);
-    wiringPiISR(3, INT_EDGE_RISING, &stop_isr);
+    pinMode(PLAY_BUTTON, INPUT);
+    pullUpDnControl(PLAY_BUTTON, PUD_UP);
+    pinMode(STOP_BUTTON, INPUT);
+    pullUpDnControl(STOP_BUTTON, PUD_UP);
+    wiringPiISR(PLAY_BUTTON, INT_EDGE_RISING, &play_pause_isr);
+    wiringPiISR(STOP_BUTTON, INT_EDGE_RISING, &stop_isr);
     //setting up the SPI interface
-    wiringPiSPISetup (0, 819200);
+    wiringPiSPISetup (SPI_CHAN, SPI_SPEED);
     return 0;
 }
 
@@ -167,7 +173,7 @@ int main(){
     printf("Complete reading"); 
 	 
     //Join and exit the playthread
-	pthread_join(thread_id, NULL); 
+    pthread_join(thread_id, NULL); 
     pthread_exit(NULL);
 	
     return 0;
