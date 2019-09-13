@@ -1,11 +1,15 @@
 
 /*
  * Prac4.cpp
- * 
+ *
  * Original written by Stefan Schröder and Dillion Heald
- * 
+ *
  * Adapted for EEE3096S 2019 by Keegan Crankshaw
- * 
+ *
+ * Implemented by Dylan Fouche
+ * UCT CS3
+ * FCHDYL001
+ *
  * This file is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
@@ -28,39 +32,41 @@ int buffer_location = 0;
 bool bufferReading = 0; //using this to switch between column 0 and 1 - the first column
 bool threadReady = false; //using this to finish writing the first column at the start of the song, before the column is played
 
-
-// Configure your interrupts here.
-// Don't forget to use debouncing.
+/*
+ *Interrupt handlers
+ */
 void play_pause_isr(void){
     long interrupt_time = millis();
+    //software debounce
     if(interrupt_time - last_play_interrupt > DEBOUNCE_TIME){
         playing = !playing;
-    }
-    if(playing){
-	printf("Playing\n");
-    }
-    else{
-        printf("Paused\n");
+        if(playing){
+	    printf("Playing\n");
+        }
+        else{
+            printf("Paused\n");
+        }
     }
     last_play_interrupt = interrupt_time;
 }
-
 void stop_isr(void){
     long interrupt_time = millis();
+    //software debounce
     if(interrupt_time - last_stop_interrupt > DEBOUNCE_TIME){
         stopped = !stopped;
-    }
-    if(stopped){
-	printf("Stopped");
-    }
-    else{
-        printf("Started");
+        if(stopped){
+	    printf("Stopped\n");
+	    exit(0);
+        }
+        else{
+            printf("Started\n");
+        }
     }
     last_stop_interrupt = interrupt_time;
 }
 
 /*
- * Setup Function. Called once 
+ * GPIO Setup Function.
  */
 int setup_gpio(void){
     //Set up wiring Pi
@@ -70,6 +76,7 @@ int setup_gpio(void){
     pullUpDnControl(PLAY_BUTTON, PUD_UP);
     pinMode(STOP_BUTTON, INPUT);
     pullUpDnControl(STOP_BUTTON, PUD_UP);
+    //registering interrupt handlers for buttons
     wiringPiISR(PLAY_BUTTON, INT_EDGE_RISING, &play_pause_isr);
     wiringPiISR(STOP_BUTTON, INT_EDGE_RISING, &stop_isr);
     //setting up the SPI interface
@@ -77,20 +84,14 @@ int setup_gpio(void){
     return 0;
 }
 
-/* 
+/*
  * Thread that handles writing to SPI
- * 
- * You must pause writing to SPI if not playing is true (the player is paused)
- * When calling the function to write to SPI, take note of the last argument.
- * You don't need to use the returned value from the wiring pi SPI function
- * You need to use the buffer_location variable to check when you need to switch buffers
  */
 void *playThread(void *threadargs){
     // If the thread isn't ready, don't do anything
     while(!threadReady)
         continue;
-    
-    //You need to only be playing if the stopped flag is false
+    //only be playing if the stopped flag is false
     while(!stopped){
         if(playing){
         //Write the buffer out to SPI
@@ -103,47 +104,29 @@ void *playThread(void *threadargs){
         }
 	}
     }
-    
+    //terminate thread
     pthread_exit(NULL);
 }
 
+/*
+ * main function
+ */
 int main(){
     // Call the setup GPIO function
 	if(setup_gpio()==-1){
         return 0;
     }
-    
-    /* Initialize thread with parameters
-     * Set the play thread to have a 99 priority
-     * Read https://docs.oracle.com/cd/E19455-01/806-5257/attrib-16/index.html
-     */ 
-    
-    //Write your logic here
+    // Initialize our pthread
     pthread_attr_t tattr;
     pthread_t thread_id;
     int newprio = 99;
     sched_param param;
-    
     pthread_attr_init (&tattr);
     pthread_attr_getschedparam (&tattr, &param); /* safe to get existing scheduling param */
     param.sched_priority = newprio; /* set the priority; others are unchanged */
     pthread_attr_setschedparam (&tattr, &param); /* setting the new scheduling param */
     pthread_create(&thread_id, &tattr, playThread, (void *)1); /* with new priority specified */
-    
-    /*
-     * Read from the file, character by character
-     * You need to perform two operations for each character read from the file
-     * You will require bit shifting
-     * 
-     * buffer[bufferWriting][counter][0] needs to be set with the control bits
-     * as well as the first few bits of audio
-     * 
-     * buffer[bufferWriting][counter][1] needs to be set with the last audio bits
-     * 
-     * Don't forget to check if you have pause set or not when writing to the buffer
-     * 
-     */
-     
+
     // Open the file
     char ch;
     FILE *filePointer;
@@ -158,36 +141,36 @@ int main(){
     int counter = 0;
     int bufferWriting = 0;
 
-    // Have a loop to read from the file
+    // Reading from file, character by character
 	while((ch = fgetc(filePointer)) != EOF){
             while(threadReady && bufferWriting==bufferReading && counter==0){
             //waits in here after it has written to a side, and the thread is still reading from the other side
             continue;
         }
-        
-        buffer[bufferWriting][counter][0] = 0b01010000 | (ch>>4);
-        buffer[bufferWriting][counter][1] = ch<<4;
-	
-        counter++;
-        if(counter >= BUFFER_SIZE+1){
-            if(!threadReady){
-                threadReady = true;
+        if(playing){
+	    //buffer[bufferWriting][counter][0] gets control bits and top 4 bits of audio
+            buffer[bufferWriting][counter][0] = 0b01010000 | (ch>>4);
+	    //buffer[bufferWriting][counter][1] gets bottom 4 bits of audio and padding zeroes
+            buffer[bufferWriting][counter][1] = ch<<4;
+            if(++counter >= BUFFER_SIZE+1){
+                if(!threadReady){
+                    threadReady = true;
+                }
+                counter = 0;
+                bufferWriting = (bufferWriting+1)%2;
             }
-
-            counter = 0;
-            bufferWriting = (bufferWriting+1)%2;
         }
 
     }
-     
+
     // Close the file
     fclose(filePointer);
-    printf("Complete reading"); 
-	 
+    printf("Complete reading");
+
     //Join and exit the playthread
-    pthread_join(thread_id, NULL); 
+    pthread_join(thread_id, NULL);
     pthread_exit(NULL);
-	
+
     return 0;
 }
 
